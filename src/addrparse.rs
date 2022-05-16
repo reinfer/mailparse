@@ -292,6 +292,17 @@ pub fn addrparse_header(header: &MailHeader) -> Result<MailAddrList, MailParseEr
     addrparse_inner(&mut w, false)
 }
 
+/// Same as `addrparse_header` but assumes header value bytes are UTF-8 rather
+/// than ISO-8859-1.
+pub fn addrparse_header_utf8(header: &MailHeader) -> Result<MailAddrList, MailParseError> {
+    let chars = std::str::from_utf8(header.value).map_err(|_| {
+        MailParseError::EncodingError(std::borrow::Cow::Borrowed("addrparse_header_utf8"))
+    })?;
+    let v = crate::header::normalized_tokens(chars);
+    let mut w = HeaderTokenWalker::new(v);
+    addrparse_inner(&mut w, false)
+}
+
 fn addrparse_inner(
     it: &mut HeaderTokenWalker,
     in_group: bool,
@@ -1095,6 +1106,17 @@ mod tests {
                     .unwrap()
                 )
             ])
+        );
+    }
+
+    #[test]
+    fn parse_utf8() {
+        let (parsed, _) = crate::parse_header("From: \"Götz C\" <g@c.de>".as_bytes()).unwrap();
+        assert_eq!(
+            addrparse_header_utf8(&parsed).unwrap(),
+            MailAddrList(vec![MailAddr::Single(
+                SingleInfo::new(Some("Götz C".to_string()), "g@c.de".to_string()).unwrap()
+            )])
         );
     }
 }
